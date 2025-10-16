@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Sustainable Meal Delivery</title>
+    <!-- Essential for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for mobile-first, clean design */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; 
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 0;
+        }
+        .app-container {
+            width: 100%;
+            max-width: 420px;
+            min-height: 100vh;
+            background-color: white;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .content-area {
+            flex-grow: 1;
+            padding: 0 1.5rem 2rem 1.5rem;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        /* Custom Green Palette */
+        .header-bg { background-color: #388E3C; }
+        .accent-green { color: #4CAF50; }
+        .button-green { background-color: #4CAF50; }
+        .button-green:hover { background-color: #388E3C; }
+        .nav-item.active { color: #4CAF50; }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 2rem;
+            z-index: 100;
+        }
+        .meal-card.selected {
+            box-shadow: 0 0 0 4px #4CAF50, 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+            transform: scale(1.01);
+            transition: all 0.2s ease-in-out;
+        }
+        .meal-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .filter-btn.active {
+            background-color: #4CAF50;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .timeline-step {
+            transition: all 0.3s ease;
+        }
+        .admin-sim-btn {
+            background-color: #ef4444; 
+        }
+        .admin-sim-btn:hover {
+            background-color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- Loading/Message Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <svg id="loading-spinner" class="animate-spin h-8 w-8 text-gray-500 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p id="loading-message" class="mt-4 text-sm text-gray-700">Connecting to service...</p>
+        </div>
+        
+        <!-- Header -->
+        <header class="header-bg text-white p-5 flex justify-between items-center shadow-lg sticky top-0 z-10">
+            <div class="flex items-center space-x-2">
+                <!-- Tiffin Icon (Inline SVG) -->
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 2h10a2 2 0 0 1 2 2v4H5V4a2 2 0 0 1 2-2z"></path>
+                    <path d="M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z"></path>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <h1 class="text-xl font-bold">Tiffin Delivery</h1>
+            </div>
+            <!-- User Status Chip -->
+            <div id="status-chip" class="text-xs font-semibold px-3 py-1 rounded-full bg-white text-green-700">
+                Loading...
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="content-area">
+
+            <!-- Shared Greeting/Date -->
+            <div class="py-4 mt-2">
+                <p class="text-sm text-gray-500 font-semibold">Hello, <span id="user-name">User!</span></p>
+                <h2 class="text-xl font-bold text-gray-800">Today is <span id="current-date"></span></h2>
+                <p class="mt-2 text-xs text-gray-400">Account ID: <span id="user-id-display" class="break-all">N/A</span></p>
+            </div>
+
+            <!-- 1. MENU VIEW (The Meal Dashboard) -->
+            <section id="menu-view" class="space-y-6">
+                <h3 class="text-2xl font-bold accent-green border-b pb-2">Today's Menu</h3>
+                
+                <!-- Filter Bar -->
+                <div class="flex space-x-2 overflow-x-auto pb-2">
+                    <button class="filter-btn active text-sm font-semibold px-4 py-2 rounded-full border border-green-500 transition-colors" data-filter="All" onclick="filterMeals('All')">All Meals</button>
+                    <button class="filter-btn text-sm font-semibold px-4 py-2 rounded-full border border-green-500 text-gray-700 hover:bg-green-100 transition-colors" data-filter="Veg" onclick="filterMeals('Veg')">🌱 Vegetarian</button>
+                    <button class="filter-btn text-sm font-semibold px-4 py-2 rounded-full border border-green-500 text-gray-700 hover:bg-green-100 transition-colors" data-filter="Non-Veg" onclick="filterMeals('Non-Veg')">🍖 Non-Veg</button>
+                    <button class="filter-btn text-sm font-semibold px-4 py-2 rounded-full border border-green-500 text-gray-700 hover:bg-green-100 transition-colors" data-filter="Vegan" onclick="filterMeals('Vegan')">🌿 Vegan</button>
+                </div>
+
+                <!-- Meal Cards Container (Dynamically rendered) -->
+                <div id="meal-cards-container" class="space-y-5">
+                    <!-- Meal cards will be inserted here -->
+                </div>
+            </section>
+
+            <!-- 2. TRACKER VIEW -->
+            <section id="tracker-view" class="space-y-8 hidden">
+                <h3 class="text-2xl font-bold accent-green border-b pb-2">Delivery Tracker & Impact</h3>
+
+                <!-- Delivery Status Panel -->
+                <div id="delivery-status-panel" class="p-6 bg-green-50 rounded-xl shadow-lg">
+                    <h4 class="text-xl font-bold text-green-700 mb-3">Your Delivery Status</h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Today's Meal: <span id="tracker-meal-display" class="font-bold text-gray-800 italic">No meal selected for today.</span>
+                    </p>
+                    <div id="status-timeline" class="space-y-3">
+                        <!-- Timeline steps will be inserted here -->
+                    </div>
+                    
+                    <button id="return-tiffin-btn" onclick="confirmTiffinReturn()" class="mt-6 w-full py-3 bg-indigo-500 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Tiffin Ready for Pickup
+                    </button>
+                </div>
+
+                <!-- Eco-Impact Dashboard -->
+                <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h4 class="text-xl font-bold text-gray-800 mb-4">Your Eco-Impact</h4>
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="p-3 bg-lime-100 rounded-lg">
+                            <p class="text-3xl font-extrabold accent-green" id="containers-saved">0</p>
+                            <p class="text-xs text-gray-600">Containers Saved</p>
+                        </div>
+                        <div class="p-3 bg-lime-100 rounded-lg">
+                            <p class="text-3xl font-extrabold accent-green" id="co2-avoided">0 KG</p>
+                            <p class="text-xs text-gray-600">CO2 Emissions Avoided</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-center text-gray-500 mt-4">Every reusable container counts!</p>
+                </div>
+
+            </section>
+
+            <!-- 3. PROFILE VIEW -->
+            <section id="profile-view" class="space-y-8 hidden">
+                <h3 class="text-2xl font-bold accent-green border-b pb-2">My Profile & Subscription</h3>
+
+                <!-- Subscription Management -->
+                <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h4 class="text-xl font-bold text-gray-800 mb-3">Subscription Details</h4>
+                    <p id="profile-status-text" class="text-lg font-extrabold text-green-600 mb-4">Premium Tiffin Plan</p>
+                    <p class="text-sm text-gray-600 mb-4">
+                        **Meals:** 5 meals/week (Mon-Fri) <br>
+                        **Monthly Charge:** ₹7,999
+                    </p>
+                    <button onclick="changeView('billing')" class="w-full py-3 bg-indigo-500 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-600 transition-colors">
+                        Manage Plan & Billing
+                    </button>
+                </div>
+
+                <!-- Personal Information (Now functional) -->
+                <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h4 class="text-xl font-bold text-gray-800 mb-4">Account Information</h4>
+                    <div class="space-y-4">
+                        <label class="block">
+                            <span class="text-xs text-gray-500">Full Name</span>
+                            <input type="text" id="profile-name-input" placeholder="E.g., John Smith" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-green-500 focus:ring-green-500">
+                        </label>
+                        <label class="block">
+                            <span class="text-xs text-gray-500">Email Address</span>
+                            <input type="email" id="profile-email-input" placeholder="E.g., user@email.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-green-500 focus:ring-green-500">
+                        </label>
+                        <label class="block">
+                            <span class="text-xs text-gray-500">Delivery Address</span>
+                            <input type="text" id="profile-address-input" placeholder="E.g., 123 Main Street" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-green-500 focus:ring-green-500">
+                        </label>
+                    </div>
+                    <button onclick="saveProfile()" class="mt-6 w-full py-3 button-green text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition-colors">
+                        Save Profile Details
+                    </button>
+                </div>
+
+                <!-- ADMIN/SIMULATION TOOL -->
+                <div class="p-4 bg-red-100 rounded-xl shadow-lg border border-red-300">
+                    <h4 class="text-lg font-bold text-red-700 mb-2">🚚 Simulation Tool (Internal)</h4>
+                    <p class="text-sm text-red-600 mb-3">Use this to manually advance the delivery status.</p>
+                    <button onclick="simulateNextStep()" class="admin-sim-btn w-full py-3 text-white font-bold rounded-lg shadow-md hover:opacity-90 transition-colors">
+                        Simulate Delivery/Pickup Progress
+                    </button>
+                </div>
+
+                <button class="w-full py-3 text-sm text-red-500 font-semibold rounded-lg border border-red-200 hover:bg-red-50 transition-colors">
+                    Log Out
+                </button>
+            </section>
+            
+            <!-- 4. BILLING VIEW -->
+            <section id="billing-view" class="space-y-8 hidden">
+                <h3 class="text-2xl font-bold accent-green border-b pb-2">Finance & Billing</h3>
+
+                <!-- Current Plan -->
+                <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h4 class="text-xl font-bold text-gray-800 mb-3">Your Current Plan</h4>
+                    <div class="text-center p-4 rounded-lg bg-green-50 border border-green-200">
+                        <p class="text-2xl font-extrabold text-green-700">Premium Tiffin Plan</p>
+                        <p class="text-4xl font-black text-gray-800 mt-2">₹7,999<span class="text-lg font-normal text-gray-500">/month</span></p>
+                        <p class="text-sm text-gray-600 mt-3">Next auto-renewal on: **25 / March / 2024**</p>
+                        <p class="text-xs text-gray-400 mt-2">Last Checked: <span id="billing-last-updated" class="font-semibold">N/A</span></p>
+                    </div>
+                    <button onclick="handlePlanChange()" class="mt-4 w-full py-3 bg-yellow-500 text-white font-bold rounded-lg shadow-lg hover:bg-yellow-600 transition-colors">
+                        Change / Downgrade Plan (Simulated)
+                    </button>
+                </div>
+
+                <!-- Payment History -->
+                <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+                    <h4 class="text-xl font-bold text-gray-800 mb-4">Recent Transactions</h4>
+                    
+                    <div class="space-y-3">
+                        <!-- Transaction 1 -->
+                        <div class="flex justify-between items-center py-2 border-b">
+                            <div>
+                                <p class="font-medium text-gray-800">Premium Subscription</p>
+                                <p class="text-xs text-gray-500">25 Feb 2024</p>
+                            </div>
+                            <p class="font-bold text-green-600">₹7,999</p>
+                        </div>
+                        <!-- Transaction 2 -->
+                        <div class="flex justify-between items-center py-2 border-b">
+                            <div>
+                                <p class="font-medium text-gray-800">Referral Discount Applied</p>
+                                <p class="text-xs text-gray-500">01 Feb 2024</p>
+                            </div>
+                            <p class="font-bold text-red-500">-₹500</p>
+                        </div>
+                        <!-- Transaction 3 -->
+                        <div class="flex justify-between items-center py-2">
+                            <div>
+                                <p class="font-medium text-gray-800">Initial Setup Fee</p>
+                                <p class="text-xs text-gray-500">01 Jan 2024</p>
+                            </div>
+                            <p class="font-bold text-gray-800">₹99</p>
+                        </div>
+                    </div>
+                    <button onclick="handleViewHistory()" class="mt-6 w-full text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition-colors">
+                        View All History (Simulated)
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer Navigation (4 Items) -->
+        <nav class="flex justify-around items-center border-t border-gray-100 p-3 bg-white shadow-2xl sticky bottom-0 z-10">
+            <button id="nav-menu" class="nav-item flex flex-col items-center p-2 rounded-lg nav-item active text-green-600" data-view="menu" onclick="changeView('menu')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <span class="text-xs font-medium">Menu</span>
+            </button>
+            <button id="nav-tracker" class="nav-item flex flex-col items-center p-2 rounded-lg text-gray-500 hover:text-green-600" data-view="tracker" onclick="changeView('tracker')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 18v-4"></path><path d="M12 14l-4 4"></path><path d="M12 14l4 4"></path></svg>
+                <span class="text-xs font-medium">Tracker</span>
+            </button>
+            <button id="nav-profile" class="nav-item flex flex-col items-center p-2 rounded-lg text-gray-500 hover:text-green-600" data-view="profile" onclick="changeView('profile')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span class="text-xs font-medium">Profile</span>
+            </button>
+            <button id="nav-billing" class="nav-item flex flex-col items-center p-2 rounded-lg text-gray-500 hover:text-green-600" data-view="billing" onclick="changeView('billing')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12" y2="10"></line><line x1="12" y1="10" x2="16" y2="12"></line><line x1="12" y1="10" x2="8" y2="12"></line></svg>
+                <span class="text-xs font-medium">Billing</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        setLogLevel('Debug');
+        
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-delivery-app';
+
+        const MEAL_OPTIONS = [
+            { name: "Spicy Tofu & Vegetable Curry", type: "Vegan", calories: 450, tiers: 2, ecoScore: 5, tags: "High Protein", img: "https://placehold.co/400x200/4c7849/ffffff?text=Meal+1" },
+            { name: "Classic Chicken Biryani", type: "Non-Veg", calories: 720, tiers: 3, ecoScore: 3, tags: "Weekend Special", img: "https://placehold.co/400x200/556B2F/ffffff?text=Meal+2" },
+            { name: "Dal Makhani & Paneer Paratha", type: "Veg", calories: 610, tiers: 3, ecoScore: 4, tags: "Comfort Food", img: "https://placehold.co/400x200/6B8E23/ffffff?text=Meal+3" },
+            { name: "Grilled Salmon & Quinoa Salad", type: "Non-Veg", calories: 490, tiers: 2, ecoScore: 5, tags: "Heart Healthy", img: "https://placehold.co/400x200/8FBC8F/ffffff?text=Meal+4" },
+            { name: "Lentil Shepherd's Pie (Vegan)", type: "Vegan", calories: 530, tiers: 2, ecoScore: 5, tags: "Seasonal", img: "https://placehold.co/400x200/3CB371/ffffff?text=Meal+5" },
+        ];
+        
+        const DELIVERY_STATUS_CYCLE = [
+            'Order Placed',
+            'Meal Cooked & Packed',
+            'Out for Delivery',
+            'Delivered',
+            'Tiffin Confirmed Ready', 
+            'Tiffin Picked Up & Cleaned',
+            'Ready for Next Order'
+        ];
+
+
+        let db, auth, userId = 'loading';
+        let tiffinOrderRef, tiffinTrackerRef, userProfileRef;
+        let currentPage = 'menu';
+        let currentFilter = 'All';
+
+        window.selectMeal = selectMeal;
+        window.changeView = changeView;
+        window.confirmTiffinReturn = confirmTiffinReturn;
+        window.filterMeals = filterMeals;
+        window.handlePlanChange = handlePlanChange; 
+        window.handleViewHistory = handleViewHistory; 
+        window.saveProfile = saveProfile; 
+        window.simulateNextStep = simulateNextStep; 
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const loadingMessage = document.getElementById('loading-message');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const statusChip = document.getElementById('status-chip');
+        const dateDisplay = document.getElementById('current-date');
+        const mealCardsContainer = document.getElementById('meal-cards-container');
+        const trackerMealDisplay = document.getElementById('tracker-meal-display');
+        const returnBtn = document.getElementById('return-tiffin-btn');
+        const userNameDisplay = document.getElementById('user-name');
+        const profileNameInput = document.getElementById('profile-name-input');
+        const profileEmailInput = document.getElementById('profile-email-input');
+        const profileAddressInput = document.getElementById('profile-address-input');
+
+
+        const views = { 
+            menu: document.getElementById('menu-view'), 
+            tracker: document.getElementById('tracker-view'), 
+            profile: document.getElementById('profile-view'),
+            billing: document.getElementById('billing-view')
+        };
+        const navItems = document.querySelectorAll('.nav-item');
+        const filterButtons = document.querySelectorAll('.filter-btn');
+
+        dateDisplay.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' });
+
+
+        const initFirebaseAndLoadData = async () => {
+            if (!firebaseConfig) {
+                loadingMessage.textContent = 'Error: Configuration is missing.';
+                return;
+            }
+
+            try {
+                loadingMessage.textContent = 'Connecting to service...';
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                await setPersistence(auth, browserSessionPersistence);
+
+                if (initialAuthToken) { await signInWithCustomToken(auth, initialAuthToken); } 
+                else { await signInAnonymously(auth); }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = userId;
+                        
+                        tiffinOrderRef = doc(db, `/artifacts/${appId}/users/${userId}/tiffin_data/daily_order`);
+                        tiffinTrackerRef = doc(db, `/artifacts/${appId}/users/${userId}/tiffin_data/tracker_status`);
+                        userProfileRef = doc(db, `/artifacts/${appId}/users/${userId}/tiffin_data/user_profile`);
+                        
+                        loadingMessage.textContent = 'Loading your dashboard...';
+                        
+                        listenForOrderUpdates();
+                        listenForTrackerUpdates();
+                        listenForProfileUpdates(); 
+                        renderMenu(currentFilter, null); 
+                        renderView(currentPage);
+                    } else {
+                        userId = 'unauthenticated';
+                        userIdDisplay.textContent = userId + ' (Anon)';
+                        loadingMessage.textContent = 'Please wait, attempting login...';
+                    }
+                });
+
+            } catch (error) {
+                loadingMessage.textContent = `Error: Failed to initialize.`;
+                console.error("Firebase Init Error:", error);
+            }
+        };
+
+        const listenForProfileUpdates = () => {
+            onSnapshot(userProfileRef, (docSnap) => {
+                const data = docSnap.exists() ? docSnap.data() : {};
+                
+                const name = data.name || 'User';
+                userNameDisplay.textContent = name;
+                profileNameInput.value = data.name || '';
+                profileEmailInput.value = data.email || '';
+                profileAddressInput.value = data.address || '';
+
+            }, (error) => {
+                console.error("Profile Snapshot Error:", error);
+            });
+        };
+
+        const listenForOrderUpdates = () => {
+            onSnapshot(tiffinOrderRef, (docSnap) => {
+                loadingOverlay.classList.add('hidden'); 
+                loadingSpinner.classList.add('hidden'); 
+                let data = docSnap.exists() ? docSnap.data() : { 
+                    subscriptionStatus: 'Premium Tiffin', 
+                    mealName: null 
+                };
+                
+                if (!data.subscriptionStatus) { data.subscriptionStatus = 'Premium Tiffin'; }
+
+                renderSubscriptionStatus(data.subscriptionStatus);
+                renderMenu(currentFilter, data.mealName); 
+                
+                if (data.mealName) {
+                    trackerMealDisplay.textContent = data.mealName;
+                } else {
+                    trackerMealDisplay.textContent = 'No meal selected yet.';
+                }
+
+            }, (error) => {
+                loadingMessage.textContent = `Order data error: ${error.message}`;
+                console.error("Order Snapshot Error:", error);
+            });
+        };
+        
+        const listenForTrackerUpdates = () => {
+            onSnapshot(tiffinTrackerRef, (docSnap) => {
+                const data = docSnap.exists() ? docSnap.data() : { 
+                    deliveryStatus: 'No Order', 
+                    tiffinReadyConfirmed: false,
+                    containersSaved: 0
+                };
+                renderTracker(data);
+            }, (error) => {
+                console.error("Tracker Snapshot Error:", error);
+            });
+        };
+
+        async function saveProfile() {
+            if (!userProfileRef) return;
+
+            showModal('Saving Profile', 'Updating your personal information securely...', 1500);
+
+            try {
+                const profileData = {
+                    name: profileNameInput.value.trim(),
+                    email: profileEmailInput.value.trim(),
+                    address: profileAddressInput.value.trim(),
+                    lastUpdated: serverTimestamp()
+                };
+                
+                await setDoc(userProfileRef, profileData, { merge: true });
+                showModal('Profile Saved!', 'Your details have been successfully updated.', 2000);
+            } catch (error) {
+                showModal('Save Failed', `Error: ${error.message}`, 3000);
+                console.error("Error saving profile:", error);
+            }
+        }
+
+        const renderSubscriptionStatus = (status) => {
+            let statusText = status === 'Premium Tiffin' ? 'Premium Active' : 'Standard Access';
+            let statusClass = status === 'Premium Tiffin' ? 'bg-white text-green-700' : 'bg-yellow-200 text-yellow-700';
+
+            statusChip.textContent = statusText;
+            statusChip.className = `text-xs font-semibold px-3 py-1 rounded-full ${statusClass}`;
+            document.getElementById('profile-status-text').textContent = status;
+        };
+
+        const renderMenu = (filter, selectedMeal) => {
+            mealCardsContainer.innerHTML = '';
+            
+            const filteredMeals = MEAL_OPTIONS.filter(meal => filter === 'All' || meal.type === filter);
+
+            filteredMeals.forEach(meal => {
+                const isSelected = meal.name === selectedMeal;
+                const buttonText = isSelected ? 'SELECTED (Delivery Scheduled)' : 'SELECT FOR TODAY';
+                const buttonClass = isSelected ? 'bg-gray-400 disabled:opacity-100' : 'button-green hover:bg-green-700';
+                const cardClass = isSelected ? 'selected' : '';
+                const isDisabled = isSelected ? 'disabled' : '';
+                const tierIcon = meal.tiers === 3 ? '&#9733;&#9733;&#9733;' : (meal.tiers === 2 ? '&#9733;&#9733;' : '&#9733;');
+
+                const cardHTML = `
+                    <div id="meal-card-${meal.name.replace(/\s/g, '-')}" class="meal-card bg-white p-4 rounded-xl shadow-lg border-2 border-transparent ${cardClass}" data-meal-name="${meal.name}" data-meal-type="${meal.type}">
+                        <img src="${meal.img}" alt="${meal.name}" class="w-full h-40 object-cover rounded-lg mb-3 shadow-md" onerror="this.onerror=null; this.src='https://placehold.co/400x200/98FB98/ffffff?text=Image';" >
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="text-xl font-bold text-gray-800">${meal.name}</h4>
+                                <p class="text-sm text-gray-500">${meal.type} | ${meal.calories} kcal</p>
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <p class="text-sm font-bold text-green-600">Score: ${meal.ecoScore}/5</p>
+                                <p class="text-xs text-gray-400">${tierIcon} Tiers</p>
+                            </div>
+                        </div>
+                        <button onclick="selectMeal('${meal.name}')" class="select-button mt-4 w-full py-2 text-white font-semibold rounded-lg shadow-md ${buttonClass}" ${isDisabled}>
+                            ${buttonText}
+                        </button>
+                    </div>
+                `;
+                mealCardsContainer.innerHTML += cardHTML;
+            });
+        }
+
+        function filterMeals(filter) {
+            currentFilter = filter;
+            filterButtons.forEach(btn => {
+                if (btn.getAttribute('data-filter') === filter) {
+                    btn.classList.add('active');
+                    btn.classList.remove('text-gray-700', 'hover:bg-green-100');
+                } else {
+                    btn.classList.remove('active');
+                    btn.classList.add('text-gray-700', 'hover:bg-green-100');
+                }
+            });
+            onSnapshot(tiffinOrderRef, (docSnap) => {
+                const selectedMeal = docSnap.exists() ? docSnap.data().mealName : null;
+                renderMenu(currentFilter, selectedMeal);
+            });
+        }
+        
+        const renderTracker = (data) => {
+            const { deliveryStatus, tiffinReadyConfirmed, containersSaved } = data;
+            const timelineDiv = document.getElementById('status-timeline');
+            
+            const steps = [
+                { label: 'Order Placed (Menu Selected)', status: 'Order Placed', nextExpected: 'Meal Cooked & Packed' },
+                { label: 'Meal Cooked & Packed', status: 'Meal Cooked & Packed', nextExpected: 'Out for Delivery' },
+                { label: 'Out for Delivery', status: 'Out for Delivery', nextExpected: 'Delivered (Enjoy!)' },
+                { label: 'Delivered (Enjoy!)', status: 'Delivered', nextExpected: 'Tiffin Confirmed Ready' },
+                { label: 'Tiffin Confirmed Ready', status: 'Tiffin Confirmed Ready', nextExpected: 'Tiffin Picked Up & Cleaned' },
+                { label: 'Tiffin Picked Up & Cleaned', status: 'Tiffin Picked Up & Cleaned', nextExpected: 'Ready for Next Order' },
+            ];
+
+            timelineDiv.innerHTML = ''; 
+            const isCycleComplete = deliveryStatus === 'Ready for Next Order';
+
+            steps.forEach((step, index) => {
+                let isComplete = false;
+                let isActive = false;
+                
+                if (deliveryStatus === step.status) {
+                    isComplete = true;
+                    isActive = true;
+                } else if (DELIVERY_STATUS_CYCLE.indexOf(deliveryStatus) > DELIVERY_STATUS_CYCLE.indexOf(step.status)) {
+                    isComplete = true; 
+                }
+
+                if (isCycleComplete) {
+                    isComplete = false;
+                    isActive = false;
+                }
+
+                if (DELIVERY_STATUS_CYCLE.indexOf(deliveryStatus) === index - 1) {
+                    isActive = true; 
+                    isComplete = false;
+                }
+
+                const dotClass = isComplete ? 'bg-green-500' : (isActive ? 'bg-yellow-500' : 'bg-gray-300');
+                const textClass = isComplete ? 'text-green-700' : (isActive ? 'font-semibold text-gray-800' : 'text-gray-500');
+
+                timelineDiv.innerHTML += `
+                    <div class="flex items-start space-x-3 timeline-step">
+                        <div class="w-4 h-4 rounded-full ${dotClass} flex-shrink-0 mt-1"></div>
+                        <div>
+                            <p class="text-sm ${textClass}">${step.label}</p>
+                            ${isActive && !isComplete ? `<p class="text-xs text-yellow-600">Expected: ${step.nextExpected}</p>` : ''}
+                        </div>
+                    </div>
+                    ${step.label !== steps[steps.length - 1].label ? `<div class="ml-2 w-0.5 h-8 ${isComplete ? 'bg-green-500' : 'bg-gray-300'}"></div>` : ''}
+                `;
+            });
+            
+            document.getElementById('containers-saved').textContent = containersSaved || 0;
+            document.getElementById('co2-avoided').textContent = `${((containersSaved || 0) * 0.21).toFixed(2)} KG`;
+
+            if (deliveryStatus === 'Delivered' && !tiffinReadyConfirmed) {
+                returnBtn.disabled = false;
+                returnBtn.textContent = 'CONFIRM: Tiffin is Ready for Pickup';
+            } else if (tiffinReadyConfirmed && deliveryStatus === 'Tiffin Confirmed Ready') {
+                returnBtn.disabled = true;
+                returnBtn.textContent = 'Tiffin Return Confirmed! Waiting for Pickup...';
+            } else {
+                returnBtn.disabled = true;
+                returnBtn.textContent = `Tiffin Ready for Pickup (${deliveryStatus})`;
+            }
+        };
+
+        function showModal(title, message, duration = 3000) {
+            loadingOverlay.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden'); 
+            loadingMessage.innerHTML = `<h4 class="text-xl font-bold text-gray-800">${title}</h4><p class="text-sm mt-2 text-gray-600">${message}</p>`;
+            
+            statusChip.textContent = 'Processing...';
+            statusChip.className = 'text-xs font-semibold px-3 py-1 rounded-full bg-yellow-200 text-yellow-700';
+
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+                loadingSpinner.classList.add('hidden'); 
+                renderSubscriptionStatus('Premium Tiffin'); 
+            }, duration);
+        }
+
+        const updateBillingTimestamp = () => {
+            const now = new Date();
+            const formattedTime = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            const formattedDate = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            document.getElementById('billing-last-updated').textContent = `${formattedDate} at ${formattedTime}`;
+        };
+
+        function changeView(viewName) {
+            currentPage = viewName;
+            Object.values(views).forEach(v => v.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+
+            navItems.forEach(item => {
+                item.classList.remove('active', 'text-green-600', 'fill-current');
+                item.classList.add('text-gray-500', 'hover:text-green-600');
+                if (item.getAttribute('data-view') === viewName) {
+                    item.classList.add('active', 'text-green-600');
+                    item.classList.remove('text-gray-500');
+                }
+            });
+            
+            if (viewName === 'billing') {
+                updateBillingTimestamp();
+            }
+        }
+        
+        function handlePlanChange() {
+            showModal('Portal Access', 'Redirecting to subscription management portal...', 4000);
+        }
+
+        function handleViewHistory() {
+            showModal('Detailed History', 'Requesting detailed transaction logs...', 4500);
+        }
+        
+        async function simulateNextStep() {
+            if (!tiffinTrackerRef) return;
+
+            const docSnap = await getDoc(tiffinTrackerRef);
+            let data = docSnap.exists() ? docSnap.data() : { deliveryStatus: 'Ready for Next Order', containersSaved: 0, tiffinReadyConfirmed: false };
+            let currentStatus = data.deliveryStatus || 'Ready for Next Order';
+            let currentIndex = DELIVERY_STATUS_CYCLE.indexOf(currentStatus);
+            let nextIndex = currentIndex + 1;
+            let nextStatus;
+
+            if (nextIndex >= DELIVERY_STATUS_CYCLE.length) {
+                const orderSnap = await getDoc(tiffinOrderRef);
+                const mealSelected = orderSnap.exists() && orderSnap.data().mealName;
+                
+                if (mealSelected) {
+                    nextStatus = 'Order Placed'; 
+                } else {
+                    showModal('Cycle Complete!', 'A meal must be selected on the Menu tab to start a new cycle.', 3000);
+                    return;
+                }
+            } else {
+                nextStatus = DELIVERY_STATUS_CYCLE[nextIndex];
+            }
+            
+            const containerIncrement = (nextStatus === 'Tiffin Picked Up & Cleaned') ? 1 : 0;
+            const newContainersSaved = data.containersSaved + containerIncrement;
+
+            showModal('Delivery Simulation', `Status updated to **${nextStatus}**`, 1500);
+
+            try {
+                await setDoc(tiffinTrackerRef, {
+                    deliveryStatus: nextStatus,
+                    lastUpdate: serverTimestamp(),
+                    containersSaved: newContainersSaved,
+                    tiffinReadyConfirmed: (nextStatus === 'Order Placed' || nextStatus === 'Ready for Next Order') ? false : data.tiffinReadyConfirmed
+                }, { merge: true });
+            } catch (error) {
+                 showModal('Update Failed', `Error: ${error.message}`, 3000);
+                 console.error("Error simulating step:", error);
+            }
+        }
+
+        async function selectMeal(mealName) {
+            loadingOverlay.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden');
+            loadingMessage.textContent = `Scheduling ${mealName}...`;
+            
+            if (!tiffinOrderRef) return; 
+
+            try {
+                await setDoc(tiffinOrderRef, {
+                    mealName: mealName,
+                    date: dateDisplay.textContent,
+                    selectedAt: serverTimestamp(),
+                    subscriptionStatus: 'Premium Tiffin', 
+                    userId: userId
+                });
+                
+                 await setDoc(tiffinTrackerRef, {
+                    deliveryStatus: 'Order Placed',
+                    tiffinReadyConfirmed: false,
+                    lastUpdate: serverTimestamp(),
+                    containersSaved: (await getDoc(tiffinTrackerRef)).data()?.containersSaved || 0 
+                }, { merge: true });
+
+                loadingMessage.innerHTML = 'Selection saved! <br>Delivery starting soon.';
+            } catch (error) {
+                loadingMessage.innerHTML = `Failed to save order. Error: ${error.message}`;
+                console.error("Error saving meal selection:", error);
+            } finally {
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                    loadingSpinner.classList.add('hidden');
+                }, 500);
+            }
+        }
+        
+        async function confirmTiffinReturn() {
+            loadingOverlay.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden');
+            loadingMessage.textContent = `Confirming Tiffin Return...`;
+            
+            if (!tiffinTrackerRef || returnBtn.disabled) return;
+
+            try {
+                await setDoc(tiffinTrackerRef, {
+                    tiffinReadyConfirmed: true,
+                    deliveryStatus: 'Tiffin Confirmed Ready', 
+                    lastReturnConfirm: serverTimestamp()
+                }, { merge: true });
+                
+                loadingMessage.innerHTML = 'Return confirmed! <br>Driver notified.';
+            } catch (error) {
+                loadingMessage.innerHTML = `Failed to confirm return. Error: ${error.message}`;
+                console.error("Error confirming tiffin return:", error);
+            } finally {
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                    loadingSpinner.classList.add('hidden');
+                }, 500);
+            }
+        }
+
+        window.onload = initFirebaseAndLoadData;
+        
+    </script>
+</body>
+</html>
